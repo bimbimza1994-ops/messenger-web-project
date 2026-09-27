@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: messenger-web-tester
+    runtime: docker
+    plan: free
+    autoDeploy: true
+    envVars:
+      - key: ADMIN_KEY
+        sync: false
+      - key: MASTER_KEY
+        sync: false
+      - key: GRAPH_API_VERSION
+        value: v24.0
