@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 10000);
 const GRAPH_API_VERSION = process.env.GRAPH_API_VERSION || 'v24.0';
 const DATA_DIR = path.join(__dirname, 'data');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.enc.json');
@@ -16,6 +16,8 @@ const MASTER_KEY_RAW = process.env.MASTER_KEY || '';
 
 app.use(express.json({ limit: '64kb' }));
 app.use(express.urlencoded({ extended: false }));
+// เสิร์ฟไฟล์จากทั้ง root และ public เผื่อไว้
+app.use(express.static(__dirname));
 app.use(express.static(path.join(__dirname, 'public')));
 
 function requireAdmin(req, res, next) {
@@ -69,12 +71,10 @@ function safeSettings(s) {
 }
 
 app.get('/api/health', (_req,res)=>res.json({ok:true, service:'messenger-web-tester'}));
-
 app.get('/api/settings', requireAdmin, async (_req,res)=>{
   try { res.json({ok:true, settings:safeSettings(await loadSettings())}); }
   catch(e) { res.status(500).json({ok:false,error:e.message}); }
 });
-
 app.post('/api/settings', requireAdmin, async (req,res)=>{
   try {
     const current = await loadSettings();
@@ -88,12 +88,10 @@ app.post('/api/settings', requireAdmin, async (req,res)=>{
     res.json({ok:true,settings:safeSettings(next)});
   } catch(e) { res.status(500).json({ok:false,error:e.message}); }
 });
-
 app.post('/api/settings/clear', requireAdmin, async (_req,res)=>{
   try { await fs.rm(SETTINGS_FILE,{force:true}); res.json({ok:true}); }
   catch(e) { res.status(500).json({ok:false,error:e.message}); }
 });
-
 async function graphRequest(url, options={}) {
   const response = await fetch(url, options);
   const text = await response.text();
@@ -104,7 +102,6 @@ async function graphRequest(url, options={}) {
   }
   return data;
 }
-
 app.post('/api/messenger/test', requireAdmin, async (req,res)=>{
   try {
     const s = await loadSettings();
@@ -118,8 +115,6 @@ app.post('/api/messenger/test', requireAdmin, async (req,res)=>{
     res.json({ok:true,data});
   } catch(e) { res.status(e.status || 500).json({ok:false,error:e.message,graph:e.graph?.error || undefined}); }
 });
-
-// Messenger webhook verification.
 app.get('/webhook', async (req,res)=>{
   try {
     const s = await loadSettings();
@@ -128,8 +123,6 @@ app.get('/webhook', async (req,res)=>{
     return res.sendStatus(403);
   } catch { return res.sendStatus(403); }
 });
-
-// Messenger webhook receiver. Acknowledge quickly; do not expose access tokens.
 app.post('/webhook', async (req,res)=>{
   res.sendStatus(200);
   const body=req.body;
@@ -141,6 +134,14 @@ app.post('/webhook', async (req,res)=>{
   } catch {}
 });
 
-app.use((_req,res)=>res.sendFile(path.join(__dirname,'public','index.html')));
+// Fallback - หา index.html ทั้ง 2 ที่
+app.use(async (_req,res)=>{
+  try {
+    await fs.access(path.join(__dirname, 'public', 'index.html'));
+    return res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  } catch {
+    return res.sendFile(path.join(__dirname, 'index.html'));
+  }
+});
 
-app.listen(PORT,()=>console.log(`Messenger web tester listening on :${PORT}`));
+app.listen(PORT,()=>console.log(`Server running on port ${PORT}`));
